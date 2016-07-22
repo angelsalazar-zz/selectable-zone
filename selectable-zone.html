@@ -4,8 +4,14 @@
   <template>
     <style>
       :host {
+        flex: 1;
         display: flex;
-        flex-wrap: wrap;
+        flex-flow: row wrap;
+        justify-content: space-around;
+      }
+      :host > div.selector{
+        position: absolute;
+        background: rgba(0,0,255,0.1);
       }
     </style>
     <content></content>
@@ -13,11 +19,161 @@
 
   <script>
     Polymer({
+      // Custom component name Selectable-zone (thumb-nail components wrapper)
       is: 'selectable-zone',
+      // Properties
+      /*
+      _startX (Number) private property store the position on the X axis.
+      _startY (Number) private property store the position on the Y axis.
+      */
       properties: {
-
+        _startX:{
+            type:Number,
+            value:0
+          },
+          _startY:{
+            type:Number,
+            value:0
+          }
       },
-
+      /*
+      listeners
+      down (mousedown)
+      _handleDown callback
+      */
+      listeners: {
+        mousedown: '_handleDown'
+      },
+      /**
+      * _handleDown, Start the drag Selection
+      * @param {event} e
+      */
+      _handleDown:function(e){
+          e.preventDefault();                                                    //Preventing default behavior of mousedown event
+          this._startX = e.pageX;                                                //Store the X and Y coordinate (Current Position when you clicked)
+          this._startY = e.pageY;
+          var selector = document.createElement('div');                          //Create the selector
+          selector.id = "boxselector";
+          selector.classList.add('selector');
+          Polymer.dom(this.root).appendChild(selector);                          //Attach the selector to the selectable-zone
+          Polymer.dom.flush();
+          this.listen(this, 'mousemove', '_handleMove');                         //Enable mousemove and mouseup events
+          this.listen(this, 'mouseup', '_handleUp');
+        },
+        /**
+        * _handleMove, selecting selectable thumb-nail components
+        * @param {event} e
+        */
+        _handleMove:function(e){
+          e.preventDefault();                                                                      //Preventing default behavior of mousemove event
+          var endY = e.pageY;                                                                      //Get the cursor's current position (X and Y coordinate)
+          var endX = e.pageX;
+          var box = this._createBoxSelector(this._startX,this._startY,endX,endY);                  //Get boundaries (beginX,beginY,endX,endY)
+          this._drawSeletor(this.$$('#boxselector'),box);                                          //Draw selector based on boundaries
+          var thumbNails = this.queryAllEffectiveChildren('thumb-nail[selectable]');               //Query selectable thumb-nail components
+          //Foreach thumb-nail
+          for(var i=0;i<thumbNails.length;i++){
+            //get boundaries
+            var thumbNailBox = this._createBoxSelector(thumbNails[i].getBoundingClientRect().left,
+                                                       thumbNails[i].getBoundingClientRect().top,
+                                                       thumbNails[i].getBoundingClientRect().left+thumbNails[i].getBoundingClientRect().width,
+                                                       thumbNails[i].getBoundingClientRect().top+thumbNails[i].getBoundingClientRect().height);
+            //Get the selector boundaries
+            var selectorBox = this._createBoxSelector(this._startX,this._startY,endX,endY);
+            //if thumb-nail boundaries overlaps selector boundaries
+            if(this._overLap(thumbNailBox,selectorBox)){
+              //if so, then check if thumb-nail is not selecting,
+              if(!thumbNails[i].selecting)
+                thumbNails[i].set('selecting',true);    //if so selecting sets to true
+            }else{// if no overlap,then
+              //check if selecting,
+              if(thumbNails[i].selecting)
+                thumbNails[i].set('selecting',false);  //if so selecting sets to false
+            }//end else
+          }
+        },
+        /**
+        * _handleUp, end Drag Selection
+        * @param {event} e
+        */
+        _handleUp:function(e){
+          e.preventDefault();                                                                           //Preventing default behavior of mousemove event
+          Polymer.dom(this.root).removeChild(this.$$('#boxselector'))                                   //Remove Selector
+          Polymer.dom.flush();
+          var selectorBox = this._createBoxSelector(this._startX,this._startY,e.pageX,e.pageY);        //Get selector boundaries
+          var thumbNails = this.queryAllEffectiveChildren('thumb-nail[selectable]');                   //query all the selectable thumb-nail components
+          //For each thumb-nail
+          for(var i=0;i<thumbNails.length;i++){
+            //get its boundaries
+            var thumbNailBox = this._createBoxSelector(thumbNails[i].getBoundingClientRect().left,
+                                                       thumbNails[i].getBoundingClientRect().top,
+                                                       thumbNails[i].getBoundingClientRect().left+thumbNails[i].getBoundingClientRect().width,
+                                                       thumbNails[i].getBoundingClientRect().top+thumbNails[i].getBoundingClientRect().height);
+            //if it's not selecting
+            if(!thumbNails[i].selecting){
+              //then set seleting and selected to false
+              thumbNails[i].set('selecting',false);
+              thumbNails[i].set('selected',false);
+            }else{// if it is selecting
+              //check overlap
+              if (this._overLap(thumbNailBox,selectorBox)) {
+                //if so, check if it is not selected
+                  if (!thumbNails[i].selected) {
+                    //if so, then select the thumb-nail
+                    thumbNails[i].set('selected',true);
+                  }
+              }
+            }
+            //set selecting to false for all the thumb-nail components
+            thumbNails[i].set('selecting',false);
+          }
+          this.unlisten(this, 'mousemove', '_handleMove');                                                //disable mousemove and up events
+          this.unlisten(this, 'mouseup', '_handleUp');
+        },
+        /**
+        * _drawSeletor, Draw the selector box
+        * @param {element} selectorElement
+        * @param {object} box
+        */
+        _drawSeletor:function(selectorElement,box){
+          selectorElement.style.top = box.beginY+'px';
+          selectorElement.style.left = box.beginX+'px';
+          selectorElement.style.width = (box.endX - box.beginX)+'px';
+          selectorElement.style.height = (box.endY - box.beginY)+'px';
+        },
+        /**
+        * _createBoxSelector, Return Object with the boundaries (beginX,beginY,endX,endY)
+        * @param {number} startX
+        * @param {number} startY
+        * @param {number} endX
+        * @param {number} endY
+        */
+        _createBoxSelector: function(startX,startY,endX,endY){
+          var box = {}
+          if(startX > endX){
+            box.beginX = endX;
+            box.endX = startX;
+          }else{
+            box.beginX = startX;
+            box.endX = endX;
+          }
+          if(startY > endY){
+            box.beginY = endY;
+            box.endY = startY;
+          }else{
+            box.beginY = startY;
+            box.endY = endY;
+          }
+          return box;
+        },
+        /**
+        * _overLap, Return True if two boxes are overlapping
+        * @param {object} thumbNail
+        * @param {object} selectorBox
+        */
+        _overLap(thumbNail,selectorBox){
+          return (selectorBox.beginX <= thumbNail.endX && selectorBox.endX >= thumbNail.beginX) && (selectorBox.beginY <= thumbNail.endY && selectorBox.endY>= thumbNail.beginY)
+        }
     });
   </script>
 </dom-module>
