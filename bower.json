@@ -3,7 +3,8 @@
   "description": "selectable-zone custom component",
   "main": "selectable-zone.html",
   "dependencies": {
-    "polymer": "Polymer/polymer#^1.4.0"
+    "polymer": "Polymer/polymer#^1.4.0",
+    "thumb-nail": "angelsalazar/thumb-nail#master"
   },
   "devDependencies": {
     "iron-component-page": "PolymerElements/iron-component-page#^1.0.0",
